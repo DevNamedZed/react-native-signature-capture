@@ -9,7 +9,7 @@ Pod::Spec.new do |s|
   s.author       = package["author"]
   s.homepage     = package["homepage"]
   s.license      = package["license"]
-  s.platform     = :ios, "16.4"
+  s.platform     = :ios, "13.0"
   s.source       = { :git => "https://github.com/RepairShopr/react-native-signature-capture", :tag => "#{s.version}" }
   s.source_files = "ios/*.{h,m,swift}"
   s.frameworks   = "UIKit", "CoreGraphics", "QuartzCore"
