@@ -55,6 +55,14 @@ public class RSSignatureCaptureMainView extends LinearLayout implements OnClickL
         ViewGroup.LayoutParams.MATCH_PARENT));
   }
 
+  @Override
+  protected void onDetachedFromWindow() {
+    super.onDetachedFromWindow();
+    if (mActivity != null) {
+      mActivity.setRequestedOrientation(mOriginalOrientation);
+    }
+  }
+
   public RSSignatureCaptureView getSignatureView() {
     return signatureView;
   }
