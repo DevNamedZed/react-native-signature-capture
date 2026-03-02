@@ -17,10 +17,23 @@ class RSSignatureView: RCTView {
     var rotateClockwise = false
     var square = false
     var showBorder = true
-    var showNativeButtons = true
-    var showTitleLabel = true
+    var showNativeButtons = true {
+        didSet {
+            saveButton?.isHidden = !showNativeButtons
+            clearButton?.isHidden = !showNativeButtons
+        }
+    }
+    var showTitleLabel = true {
+        didSet {
+            titleLabel?.isHidden = !showTitleLabel
+        }
+    }
     private var _backgroundColor: UIColor = .white
-    var strokeColor: UIColor = .black
+    var strokeColor: UIColor = .black {
+        didSet {
+            sign?.strokeColor = strokeColor
+        }
+    }
 
     // MARK: - Lifecycle
 
@@ -169,6 +182,7 @@ class RSSignatureView: RCTView {
         }
 
         loaded = true
+        sign?.frame = bounds
         border.path = showBorder ? UIBezierPath(rect: bounds).cgPath : nil
         border.frame = bounds
     }
@@ -177,7 +191,11 @@ class RSSignatureView: RCTView {
 
     override var backgroundColor: UIColor? {
         get { _backgroundColor }
-        set { _backgroundColor = newValue ?? .white }
+        set {
+            _backgroundColor = newValue ?? .white
+            super.backgroundColor = _backgroundColor
+            sign?.backgroundColor = _backgroundColor
+        }
     }
 
     // MARK: - Actions
@@ -189,7 +207,7 @@ class RSSignatureView: RCTView {
     func saveImage() {
         saveButton?.isHidden = true
         clearButton?.isHidden = true
-        let signImage = sign?.signatureImage(rotated: rotateClockwise, square: square)
+        let signImage = sign?.signatureImage(clockwise: rotateClockwise, square: square)
 
         saveButton?.isHidden = false
         clearButton?.isHidden = false

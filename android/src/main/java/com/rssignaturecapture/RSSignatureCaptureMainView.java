@@ -24,26 +24,27 @@ import android.widget.LinearLayout;
 
 import android.app.Activity;
 import android.content.pm.ActivityInfo;
-import java.lang.Boolean;
+
+import java.lang.ref.WeakReference;
 
 public class RSSignatureCaptureMainView extends LinearLayout implements OnClickListener, RSSignatureCaptureView.SignatureCallback {
   LinearLayout buttonsLayout;
   RSSignatureCaptureView signatureView;
 
-  Activity mActivity;
+  WeakReference<Activity> mActivityRef;
   int mOriginalOrientation;
-  Boolean saveFileInExtStorage = false;
+  boolean saveFileInExtStorage = false;
   String viewMode = "portrait";
-  Boolean showBorder = true;
-  Boolean showNativeButtons = true;
-  Boolean showTitleLabel = true;
+  boolean showBorder = true;
+  boolean showNativeButtons = true;
+  boolean showTitleLabel = true;
   int maxSize = 500;
 
   public RSSignatureCaptureMainView(Context context, Activity activity) {
     super(context);
     Log.d("React:", "RSSignatureCaptureMainView(Constructor)");
     mOriginalOrientation = activity.getRequestedOrientation();
-    mActivity = activity;
+    mActivityRef = new WeakReference<>(activity);
 
     this.setOrientation(LinearLayout.VERTICAL);
     this.signatureView = new RSSignatureCaptureView(context, this);
@@ -58,8 +59,9 @@ public class RSSignatureCaptureMainView extends LinearLayout implements OnClickL
   @Override
   protected void onDetachedFromWindow() {
     super.onDetachedFromWindow();
-    if (mActivity != null) {
-      mActivity.setRequestedOrientation(mOriginalOrientation);
+    Activity activity = mActivityRef.get();
+    if (activity != null && !activity.isFinishing()) {
+      activity.setRequestedOrientation(mOriginalOrientation);
     }
   }
 
@@ -68,20 +70,27 @@ public class RSSignatureCaptureMainView extends LinearLayout implements OnClickL
   }
 
   public void setSaveFileInExtStorage(Boolean saveFileInExtStorage) {
-    this.saveFileInExtStorage = saveFileInExtStorage;
+    if (saveFileInExtStorage != null) {
+      this.saveFileInExtStorage = saveFileInExtStorage;
+    }
   }
 
   public void setViewMode(String viewMode) {
+    if (viewMode == null) return;
     this.viewMode = viewMode;
 
+    Activity activity = mActivityRef.get();
+    if (activity == null || activity.isFinishing()) return;
+
     if (viewMode.equalsIgnoreCase("portrait")) {
-      mActivity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+      activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
     } else if (viewMode.equalsIgnoreCase("landscape")) {
-      mActivity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+      activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
     }
   }
 
   public void setShowNativeButtons(Boolean showNativeButtons) {
+    if (showNativeButtons == null) return;
     this.showNativeButtons = showNativeButtons;
     if (showNativeButtons) {
       Log.d("Added Native Buttons", "Native Buttons:" + showNativeButtons);
@@ -92,7 +101,9 @@ public class RSSignatureCaptureMainView extends LinearLayout implements OnClickL
   }
 
   public void setMaxSize(int size) {
-    this.maxSize = size;
+    if (size > 0) {
+      this.maxSize = size;
+    }
   }
 
   private LinearLayout buttonsLayout() {
@@ -133,7 +144,14 @@ public class RSSignatureCaptureMainView extends LinearLayout implements OnClickL
       return;
     }
 
+    Bitmap fullBitmap = this.signatureView.getSignature();
+    if (fullBitmap == null) return;
+
     File myDir = getContext().getExternalFilesDir("/saved_signature");
+    if (myDir == null) {
+      fullBitmap.recycle();
+      return;
+    }
 
     if (!myDir.exists()) {
       myDir.mkdirs();
@@ -149,26 +167,33 @@ public class RSSignatureCaptureMainView extends LinearLayout implements OnClickL
     try {
       Log.d("React Signature", "Save file-======:" + saveFileInExtStorage);
       if (saveFileInExtStorage) {
-        FileOutputStream out = new FileOutputStream(file);
-        this.signatureView.getSignature().compress(Bitmap.CompressFormat.PNG, 90, out);
-        out.flush();
-        out.close();
+        try (FileOutputStream out = new FileOutputStream(file)) {
+          fullBitmap.compress(Bitmap.CompressFormat.PNG, 90, out);
+          out.flush();
+        }
       }
 
-      ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-      Bitmap resizedBitmap = getResizedBitmap(this.signatureView.getSignature());
-      resizedBitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
+      Bitmap resizedBitmap = getResizedBitmap(fullBitmap);
+      try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()) {
+        resizedBitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
 
-      byte[] byteArray = byteArrayOutputStream.toByteArray();
-      String encoded = Base64.encodeToString(byteArray, Base64.NO_WRAP);
+        byte[] byteArray = byteArrayOutputStream.toByteArray();
+        String encoded = Base64.encodeToString(byteArray, Base64.NO_WRAP);
 
-      WritableMap event = Arguments.createMap();
-      event.putString("pathName", file.getAbsolutePath());
-      event.putString("encoded", encoded);
-      ReactContext reactContext = (ReactContext) getContext();
-      reactContext.getJSModule(RCTEventEmitter.class).receiveEvent(getId(), "onSaveEvent", event);
+        WritableMap event = Arguments.createMap();
+        event.putString("pathName", file.getAbsolutePath());
+        event.putString("encoded", encoded);
+        ReactContext reactContext = (ReactContext) getContext();
+        reactContext.getJSModule(RCTEventEmitter.class).receiveEvent(getId(), "onSaveEvent", event);
+      } finally {
+        if (resizedBitmap != fullBitmap) {
+          resizedBitmap.recycle();
+        }
+      }
     } catch (Exception e) {
       e.printStackTrace();
+    } finally {
+      fullBitmap.recycle();
     }
   }
 
@@ -176,6 +201,8 @@ public class RSSignatureCaptureMainView extends LinearLayout implements OnClickL
     Log.d("React Signature", "maxSize:" + maxSize);
     int width = image.getWidth();
     int height = image.getHeight();
+
+    if (width <= 0 || height <= 0) return image;
 
     float bitmapRatio = (float) width / (float) height;
     if (bitmapRatio > 1) {
@@ -185,6 +212,9 @@ public class RSSignatureCaptureMainView extends LinearLayout implements OnClickL
       height = maxSize;
       width = (int) (height * bitmapRatio);
     }
+
+    width = Math.max(1, width);
+    height = Math.max(1, height);
 
     return Bitmap.createScaledBitmap(image, width, height, true);
   }
@@ -197,6 +227,7 @@ public class RSSignatureCaptureMainView extends LinearLayout implements OnClickL
 
   @Override
   public void onDragged() {
+    if (!isAttachedToWindow()) return;
     WritableMap event = Arguments.createMap();
     event.putBoolean("dragged", true);
     ReactContext reactContext = (ReactContext) getContext();

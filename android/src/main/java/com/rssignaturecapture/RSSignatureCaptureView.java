@@ -79,12 +79,9 @@ public class RSSignatureCaptureView extends View {
 	}
 
 	public Bitmap getSignature() {
-		Bitmap signatureBitmap = null;
+		if (getWidth() <= 0 || getHeight() <= 0) return null;
 
-		if (signatureBitmap == null) {
-			signatureBitmap = Bitmap.createBitmap(this.getWidth(), this.getHeight(), Bitmap.Config.ARGB_8888);
-		}
-
+		Bitmap signatureBitmap = Bitmap.createBitmap(this.getWidth(), this.getHeight(), Bitmap.Config.ARGB_8888);
 		final Canvas canvas = new Canvas(signatureBitmap);
 		this.draw(canvas);
 
@@ -114,7 +111,6 @@ public class RSSignatureCaptureView extends View {
 			TimedPoint endPoint = curve.endPoint;
 
 			float velocity = endPoint.velocityFrom(startPoint);
-			velocity = Float.isNaN(velocity) ? 0.0f : velocity;
 
 			velocity = mVelocityFilterWeight * velocity
 					+ (1 - mVelocityFilterWeight) * mLastVelocity;
@@ -132,9 +128,20 @@ public class RSSignatureCaptureView extends View {
 
 	private void addBezier(Bezier curve, float startWidth, float endWidth) {
 		ensureSignatureBitmap();
+		if (mSignatureBitmapCanvas == null) return;
+
 		float originalWidth = mPaint.getStrokeWidth();
 		float widthDelta = endWidth - startWidth;
 		float drawSteps = (float) Math.floor(curve.length());
+
+		if (drawSteps < 1) {
+			mPaint.setStrokeWidth(startWidth);
+			mSignatureBitmapCanvas.drawPoint(curve.startPoint.x, curve.startPoint.y, mPaint);
+			expandDirtyRect(curve.startPoint.x, curve.startPoint.y);
+			mPaint.setStrokeWidth(originalWidth);
+			this.mIsEmpty = false;
+			return;
+		}
 
 		for (int i = 0; i < drawSteps; i++) {
 			float t = ((float) i) / drawSteps;
@@ -166,7 +173,7 @@ public class RSSignatureCaptureView extends View {
 	}
 
 	private void ensureSignatureBitmap() {
-		if (mSignatureBitmap == null) {
+		if (mSignatureBitmap == null && getWidth() > 0 && getHeight() > 0) {
 			mSignatureBitmap = Bitmap.createBitmap(getWidth(), getHeight(),
 					Bitmap.Config.ARGB_8888);
 			mSignatureBitmapCanvas = new Canvas(mSignatureBitmap);
@@ -203,7 +210,7 @@ public class RSSignatureCaptureView extends View {
 
 		float dxm = (m1.x - m2.x);
 		float dym = (m1.y - m2.y);
-		float k = l2 / (l1 + l2);
+		float k = (l1 + l2 == 0) ? 0.5f : l2 / (l1 + l2);
 		TimedPoint cm = new TimedPoint(m2.x + dxm * k, m2.y + dym * k);
 
 		float tx = s2.x - cm.x;
@@ -227,7 +234,9 @@ public class RSSignatureCaptureView extends View {
 			case MotionEvent.ACTION_DOWN:
 				mLastTouchX = eventX;
 				mLastTouchY = eventY;
-				getParent().requestDisallowInterceptTouchEvent(true);
+				if (getParent() != null) {
+					getParent().requestDisallowInterceptTouchEvent(true);
+				}
 				mPoints.clear();
 				mPath.moveTo(eventX, eventY);
 				addPoint(new TimedPoint(eventX, eventY));
@@ -236,7 +245,7 @@ public class RSSignatureCaptureView extends View {
 			case MotionEvent.ACTION_MOVE:
 				if ((Math.abs(mLastTouchX - eventX) < SCROLL_THRESHOLD
 						&& Math.abs(mLastTouchY - eventY) < SCROLL_THRESHOLD) && dragged) {
-					return false;
+					return true;
 				}
 				resetDirtyRect(eventX, eventY);
 				addPoint(new TimedPoint(eventX, eventY));
@@ -249,7 +258,9 @@ public class RSSignatureCaptureView extends View {
 				if (mPoints.size() >= 3) {
 					resetDirtyRect(eventX, eventY);
 					addPoint(new TimedPoint(eventX, eventY));
-					getParent().requestDisallowInterceptTouchEvent(true);
+					if (getParent() != null) {
+						getParent().requestDisallowInterceptTouchEvent(true);
+					}
 					sendDragEventToReact();
 				}
 				dragged = false;
@@ -306,7 +317,9 @@ public class RSSignatureCaptureView extends View {
 		mPath.reset();
 
 		if (mSignatureBitmap != null) {
+			mSignatureBitmap.recycle();
 			mSignatureBitmap = null;
+			mSignatureBitmapCanvas = null;
 			ensureSignatureBitmap();
 		}
 

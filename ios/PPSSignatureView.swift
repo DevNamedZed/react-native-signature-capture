@@ -91,7 +91,13 @@ class PPSSignatureView: UIView {
         ensureBitmapContext()
 
         if let oldImage = oldImage, let ctx = bitmapContext {
-            ctx.draw(oldImage, in: bounds)
+            ctx.saveGState()
+            ctx.concatenate(ctx.ctm.inverted())
+            let scale = UIScreen.main.scale
+            ctx.draw(oldImage, in: CGRect(x: 0, y: 0,
+                                           width: bounds.size.width * scale,
+                                           height: bounds.size.height * scale))
+            ctx.restoreGState()
         }
     }
 
@@ -308,6 +314,8 @@ class PPSSignatureView: UIView {
     }
 
     private func reduceImage(_ image: UIImage, to newSize: CGSize) -> UIImage {
+        guard image.size.width > 0, image.size.height > 0 else { return image }
+
         var scaledSize = newSize
 
         if image.size.width > image.size.height {
@@ -327,18 +335,17 @@ class PPSSignatureView: UIView {
     }
 
     func signatureImage() -> UIImage? {
-        return signatureImage(rotated: false, square: false)
+        return signatureImage(clockwise: false, square: false)
     }
 
-    func signatureImage(rotated: Bool) -> UIImage? {
-        return signatureImage(rotated: rotated, square: false)
+    func signatureImage(clockwise: Bool) -> UIImage? {
+        return signatureImage(clockwise: clockwise, square: false)
     }
 
-    func signatureImage(rotated: Bool, square: Bool) -> UIImage? {
+    func signatureImage(clockwise: Bool, square: Bool) -> UIImage? {
         guard hasSignature else { return nil }
 
         guard let snapshotImg = snapshot() else { return nil }
-        erase()
 
         var signatureImg: UIImage
 
@@ -348,8 +355,8 @@ class PPSSignatureView: UIView {
             signatureImg = snapshotImg
         }
 
-        if rotated {
-            signatureImg = rotateImage(signatureImg, clockwise: false)
+        if clockwise {
+            signatureImg = rotateImage(signatureImg, clockwise: true)
         }
 
         return signatureImg
