@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
   s.license      = package["license"]
   s.platform     = :ios, "16.4"
   s.source       = { :git => "https://github.com/RepairShopr/react-native-signature-capture", :tag => "#{s.version}" }
-  s.source_files = "ios/*.{h,m}"
+  s.source_files = "ios/*.{h,m,swift}"
   s.frameworks   = "UIKit", "CoreGraphics", "QuartzCore"
   s.dependency "React-Core"
 end

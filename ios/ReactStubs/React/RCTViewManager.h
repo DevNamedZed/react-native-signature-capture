@@ -17,3 +17,6 @@
 #define RCT_EXPORT_VIEW_PROPERTY(name, type)
 
 #define RCT_EXPORT_METHOD(method) - (void)method
+
+#define RCT_EXTERN_MODULE(objc_name, objc_supername) objc_name : objc_supername
+#define RCT_EXTERN_METHOD(method)
