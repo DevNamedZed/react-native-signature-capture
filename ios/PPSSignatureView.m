@@ -1,601 +1,398 @@
 #import "PPSSignatureView.h"
-#import <OpenGLES/ES2/glext.h>
-#import "RSSignatureViewManager.h"
 
-#define             STROKE_WIDTH_MIN 0.004 // Stroke width determined by touch velocity
-#define             STROKE_WIDTH_MAX 0.030
-#define       STROKE_WIDTH_SMOOTHING 0.5   // Low pass filter alpha
+#define STROKE_WIDTH_MIN 2.0
+#define STROKE_WIDTH_MAX 7.0
+#define STROKE_WIDTH_SMOOTHING 0.5
 
-#define           VELOCITY_CLAMP_MIN 20
-#define           VELOCITY_CLAMP_MAX 5000
+#define VELOCITY_CLAMP_MIN 20
+#define VELOCITY_CLAMP_MAX 5000
 
-#define QUADRATIC_DISTANCE_TOLERANCE 3.0   // Minimum distance to make a curve
+#define QUADRATIC_DISTANCE_TOLERANCE 3.0
 
-#define             MAXIMUM_VERTECES 100000
-
-
-static GLKVector3 StrokeColor = { 0, 0, 0 };
-static float clearColor[4] = { 1, 1, 1, 0 };
-
-// Vertex structure containing 3D point and color
-struct PPSSignaturePoint
-{
-	GLKVector3		vertex;
-	GLKVector3		color;
-};
-typedef struct PPSSignaturePoint PPSSignaturePoint;
-
-
-// Maximum verteces in signature
-static const int maxLength = MAXIMUM_VERTECES;
-
-
-// Append vertex to array buffer
-static inline void addVertex(uint *length, PPSSignaturePoint v) {
-	if ((*length) >= maxLength) {
-		return;
-	}
-	
-	GLvoid *data = glMapBufferOES(GL_ARRAY_BUFFER, GL_WRITE_ONLY_OES);
-	memcpy(data + sizeof(PPSSignaturePoint) * (*length), &v, sizeof(PPSSignaturePoint));
-	glUnmapBufferOES(GL_ARRAY_BUFFER);
-	
-	(*length)++;
-}
-
-static inline CGPoint QuadraticPointInCurve(CGPoint start, CGPoint end, CGPoint controlPoint, float percent) {
-	double a = pow((1.0 - percent), 2.0);
-	double b = 2.0 * percent * (1.0 - percent);
-	double c = pow(percent, 2.0);
-	
-	return (CGPoint) {
-		a * start.x + b * controlPoint.x + c * end.x,
-		a * start.y + b * controlPoint.y + c * end.y
-	};
-}
-
-static float generateRandom(float from, float to) { return random() % 10000 / 10000.0 * (to - from) + from; }
 static float clamp(float min, float max, float value) { return fmaxf(min, fminf(max, value)); }
 
-
-// Find perpendicular vector from two other vectors to compute triangle strip around line
-static GLKVector3 perpendicular(PPSSignaturePoint p1, PPSSignaturePoint p2) {
-	GLKVector3 ret;
-	ret.x = p2.vertex.y - p1.vertex.y;
-	ret.y = -1 * (p2.vertex.x - p1.vertex.x);
-	ret.z = 0;
-	return ret;
-}
-
-static PPSSignaturePoint ViewPointToGL(CGPoint viewPoint, CGRect bounds, GLKVector3 color) {
-	
-	return (PPSSignaturePoint) {
-		{
-			(viewPoint.x / bounds.size.width * 2.0 - 1),
-			((viewPoint.y / bounds.size.height) * 2.0 - 1) * -1,
-			0
-		},
-		color
-	};
-}
-
-
 @interface PPSSignatureView () {
-	// OpenGL state
-	EAGLContext *context;
-	GLKBaseEffect *effect;
-	
-	GLuint vertexArray;
-	GLuint vertexBuffer;
-	GLuint dotsArray;
-	GLuint dotsBuffer;
-	
-	
-	// Array of verteces, with current length
-	PPSSignaturePoint SignatureVertexData[maxLength];
-	uint length;
-	
-	PPSSignaturePoint SignatureDotsData[maxLength];
-	uint dotsLength;
-	
-	
-	// Width of line at current and previous vertex
-	float penThickness;
-	float previousThickness;
-	
-	
-	// Previous points for quadratic bezier computations
-	CGPoint previousPoint;
-	CGPoint previousMidPoint;
-	PPSSignaturePoint previousVertex;
-	PPSSignaturePoint currentVelocity;
-	UIColor* backgroundColor;
-	UIColor* strokeColor;
+    CGContextRef _bitmapContext;
+    CGFloat _penThickness;
+    CGFloat _previousThickness;
+
+    CGPoint _previousPoint;
+    CGPoint _previousMidPoint;
+
+    UIColor *_bgColor;
+    UIColor *_penColor;
 }
 
 @end
 
+@implementation PPSSignatureView
 
-@implementation PPSSignatureView {
+#pragma mark - Lifecycle
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    if (self = [super initWithFrame:frame]) {
+        [self commonInit];
+    }
+    return self;
+}
+
+- (instancetype)initWithCoder:(NSCoder *)aDecoder {
+    if (self = [super initWithCoder:aDecoder]) {
+        [self commonInit];
+    }
+    return self;
 }
 
 - (void)commonInit {
-	[EAGLContext setCurrentContext:nil];
-	context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
-	
-	if (context) {
-		
-		time(NULL);
-		
-		self.backgroundColor = [UIColor whiteColor];
-		self.strokeColor = [UIColor blackColor];
-		self.opaque = NO;
-		
-		self.context = context;
-		self.drawableDepthFormat = GLKViewDrawableDepthFormat24;
-		self.enableSetNeedsDisplay = YES;
-		
-		// Turn on antialiasing
-		self.drawableMultisample = GLKViewDrawableMultisample4X;
-		
-		[self setupGL];
-		
-		// Capture touches
-		UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(pan:)];
-		pan.maximumNumberOfTouches = pan.minimumNumberOfTouches = 1;
-		pan.cancelsTouchesInView = YES;
-		[self addGestureRecognizer:pan];
-		
-		// For dotting your i's
-		UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tap:)];
-		tap.cancelsTouchesInView = YES;
-		[self addGestureRecognizer:tap];
-		
-		// Erase with long press
-		UILongPressGestureRecognizer *longer = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(longPress:)];
-		longer.cancelsTouchesInView = YES;
-		[self addGestureRecognizer:longer];
-	}
-	else
-		[NSException raise:@"NSOpenGLES2ContextException" format:@"Failed to create OpenGL ES2 context"];
+    _bgColor = [UIColor whiteColor];
+    _penColor = [UIColor blackColor];
+    _penThickness = (STROKE_WIDTH_MIN + STROKE_WIDTH_MAX) / 2.0;
+    _previousThickness = _penThickness;
+    _previousPoint = CGPointMake(-100, -100);
+    _previousMidPoint = CGPointMake(-100, -100);
+
+    self.backgroundColor = _bgColor;
+    self.opaque = NO;
+    self.hasSignature = NO;
+
+    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(pan:)];
+    pan.maximumNumberOfTouches = 1;
+    pan.minimumNumberOfTouches = 1;
+    pan.cancelsTouchesInView = YES;
+    [self addGestureRecognizer:pan];
+
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tap:)];
+    tap.cancelsTouchesInView = YES;
+    [self addGestureRecognizer:tap];
+
+    UILongPressGestureRecognizer *longer = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(longPress:)];
+    longer.cancelsTouchesInView = YES;
+    [self addGestureRecognizer:longer];
 }
 
-
-- (id)initWithCoder:(NSCoder *)aDecoder
-{
-	if (self = [super initWithCoder:aDecoder]) [self commonInit];
-	return self;
+- (void)dealloc {
+    [self releaseBitmapContext];
 }
 
-
-- (id)initWithFrame:(CGRect)frame context:(EAGLContext *)ctx
-{
-	if (self = [super initWithFrame:frame context:ctx]) [self commonInit];
-	return self;
+- (void)releaseBitmapContext {
+    if (_bitmapContext) {
+        CGContextRelease(_bitmapContext);
+        _bitmapContext = NULL;
+    }
 }
 
+- (void)layoutSubviews {
+    [super layoutSubviews];
 
-- (void)dealloc
-{
-	self.context = nil;
-	[self tearDownGL];
-	
-	if ([EAGLContext currentContext] == context) {
-		[EAGLContext setCurrentContext:nil];
-	}
-	
-	context = nil;
+    if (self.bounds.size.width <= 0 || self.bounds.size.height <= 0) {
+        return;
+    }
+
+    // Recreate bitmap context when bounds change
+    CGImageRef oldImage = NULL;
+    if (_bitmapContext) {
+        oldImage = CGBitmapContextCreateImage(_bitmapContext);
+        [self releaseBitmapContext];
+    }
+
+    [self ensureBitmapContext];
+
+    // Redraw old content into new context if we had one
+    if (oldImage) {
+        CGContextDrawImage(_bitmapContext, self.bounds, oldImage);
+        CGImageRelease(oldImage);
+    }
 }
 
+#pragma mark - Bitmap Context
 
-- (void)drawRect:(CGRect)rect
-{
-	glClearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
-	glClear(GL_COLOR_BUFFER_BIT);
-	
-	[effect prepareToDraw];
-	
-	// Drawing of signature lines
-	if (length > 2) {
-		glBindVertexArrayOES(vertexArray);
-		glDrawArrays(GL_TRIANGLE_STRIP, 0, length);
-	}
-	
-	if (dotsLength > 0) {
-		glBindVertexArrayOES(dotsArray);
-		glDrawArrays(GL_TRIANGLE_STRIP, 0, dotsLength);
-	}
-}
+- (void)ensureBitmapContext {
+    if (_bitmapContext) return;
 
-- (void)erase {
-	length = 0;
-	dotsLength = 0;
-	self.hasSignature = NO;
-	
-	[self setNeedsDisplay];
-}
+    CGFloat scale = [UIScreen mainScreen].scale;
+    NSInteger width = (NSInteger)(self.bounds.size.width * scale);
+    NSInteger height = (NSInteger)(self.bounds.size.height * scale);
 
-- (UIImage*)imageByCombiningImage:(UIImage*)firstImage withImage:(UIImage*)secondImage {
-	UIImage *image = nil;
-	
-	CGSize newImageSize = CGSizeMake(MAX(firstImage.size.width, secondImage.size.width), MAX(firstImage.size.height, secondImage.size.height));
-	if (UIGraphicsBeginImageContextWithOptions != NULL) {
-		UIGraphicsBeginImageContextWithOptions(newImageSize, NO, [[UIScreen mainScreen] scale]);
-	} else {
-		UIGraphicsBeginImageContext(newImageSize);
-	}
-	[firstImage drawAtPoint:CGPointMake(roundf((newImageSize.width-firstImage.size.width)/2),
-																			roundf((newImageSize.height-firstImage.size.height)/2))];
-	[secondImage drawAtPoint:CGPointMake(roundf((newImageSize.width-secondImage.size.width)/2),
-																			 roundf((newImageSize.height-secondImage.size.height)/2))];
-	image = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	
-	return image;
+    if (width <= 0 || height <= 0) return;
+
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    _bitmapContext = CGBitmapContextCreate(
+        NULL,
+        width,
+        height,
+        8,
+        width * 4,
+        colorSpace,
+        kCGImageAlphaPremultipliedLast
+    );
+    CGColorSpaceRelease(colorSpace);
+
+    if (!_bitmapContext) return;
+
+    // Scale for retina
+    CGContextScaleCTM(_bitmapContext, scale, scale);
+
+    // Flip coordinate system (CGContext is bottom-up, UIKit is top-down)
+    CGContextTranslateCTM(_bitmapContext, 0, self.bounds.size.height);
+    CGContextScaleCTM(_bitmapContext, 1.0, -1.0);
+
+    // Fill with background color
+    [self fillBitmapWithBackgroundColor];
 }
 
--(UIImage *) snapshot
-{
-	UIImage *result = [super snapshot];
-	return result;
+- (void)fillBitmapWithBackgroundColor {
+    if (!_bitmapContext) return;
+
+    CGContextSaveGState(_bitmapContext);
+    CGContextSetFillColorWithColor(_bitmapContext, _bgColor.CGColor);
+    CGContextFillRect(_bitmapContext, self.bounds);
+    CGContextRestoreGState(_bitmapContext);
 }
 
-- (UIImage*)rotateImage:(UIImage*)sourceImage clockwise:(BOOL)clockwise
-{
-	CGSize size = sourceImage.size;
-	UIGraphicsBeginImageContext(CGSizeMake(size.height, size.width));
-	[[UIImage imageWithCGImage:[sourceImage CGImage]
-											 scale:1.0
-								 orientation:clockwise ? UIImageOrientationRight : UIImageOrientationLeft]
-	 drawInRect:CGRectMake(0,0,size.height ,size.width)];
-	
-	UIImage* newImage = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	
-	return newImage;
-}
+#pragma mark - Drawing
 
-- (UIImage*) reduceImage:(UIImage*)image toSize:(CGSize)newSize {
-	CGSize scaledSize = newSize;
-	float scaleFactor = 1.0;
-	
-	if(image.size.width > image.size.height) {
-		scaleFactor = image.size.width / image.size.height;
-		scaledSize.width = newSize.width;
-		scaledSize.height = newSize.height / scaleFactor;
-	}
-	else {
-		scaleFactor = image.size.height / image.size.width;
-		scaledSize.height = newSize.height;
-		scaledSize.width = newSize.width / scaleFactor;
-	}
-	
-	NSLog(@"%f x %f", scaledSize.width, scaledSize.height);
-	
-	UIGraphicsBeginImageContext(scaledSize);
-	CGRect scaledImageRect = CGRectMake( 0.0, 0.0, scaledSize.width, scaledSize.height );
-	[image drawInRect:scaledImageRect];
-	
-	UIImage* scaledImage = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	
-	return scaledImage;
-}
+- (void)drawRect:(CGRect)rect {
+    if (!_bitmapContext) return;
 
-- (UIImage *)signatureImage
-{
-	return [self signatureImage:false withSquare:false];
+    CGImageRef image = CGBitmapContextCreateImage(_bitmapContext);
+    if (image) {
+        CGContextRef ctx = UIGraphicsGetCurrentContext();
+        if (ctx) {
+            CGContextDrawImage(ctx, self.bounds, image);
+        }
+        CGImageRelease(image);
+    }
 }
-- (UIImage *)signatureImage: (BOOL) rotatedImage
-{
-	return [self signatureImage:rotatedImage withSquare:false];
-}
-- (UIImage *)signatureImage: (BOOL) rotatedImage withSquare:(BOOL) square
-{
-	if (!self.hasSignature)
-		return nil;
-	
-	UIImage *signatureImg;
-	UIImage *snapshot = [self snapshot];
-	[self erase];
-	
-	if ( UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad ) {
-		//signature
-		if (square) {
-			signatureImg = [self reduceImage:snapshot toSize: CGSizeMake(400.0f, 400.0f)];
-		}
-		else {
-			signatureImg = snapshot;
-		}
-	}
-	else {
-		//rotate iphone signature - iphone's signature screen is always landscape
-		
-		if (rotatedImage) {
-			if (square) {
-				UIImage *rotatedImg = [self rotateImage:snapshot clockwise:false];
-				signatureImg = [self reduceImage:rotatedImg toSize: CGSizeMake(400.0f, 400.0f)];
-			}
-			else {
-				UIImage *rotatedImg = [self rotateImage:snapshot clockwise:false];
-				signatureImg = rotatedImg;
-			}
-		}
-		else {
-			if (square) {
-				signatureImg = [self reduceImage:snapshot toSize: CGSizeMake(400.0f, 400.0f)];
-			}
-			else {
-				signatureImg = snapshot;
-			}
-		}
-	}
-	
-	return signatureImg;
-}
-
 
 #pragma mark - Gesture Recognizers
 
-
 - (void)tap:(UITapGestureRecognizer *)t {
-	CGPoint l = [t locationInView:self];
-	
-	if (t.state == UIGestureRecognizerStateRecognized) {
-		glBindBuffer(GL_ARRAY_BUFFER, dotsBuffer);
-		
-		PPSSignaturePoint touchPoint = ViewPointToGL(l, self.bounds, (GLKVector3){1, 1, 1});
-		addVertex(&dotsLength, touchPoint);
-		
-		PPSSignaturePoint centerPoint = touchPoint;
-		centerPoint.color = StrokeColor;
-		addVertex(&dotsLength, centerPoint);
-		
-		static int segments = 20;
-		GLKVector2 radius = (GLKVector2){
-			clamp(0.00001, 0.02, penThickness * generateRandom(0.5, 1.5)),
-			clamp(0.00001, 0.02, penThickness * generateRandom(0.5, 1.5))
-		};
-		GLKVector2 velocityRadius = radius;
-		float angle = 0;
-		
-		for (int i = 0; i <= segments; i++) {
-			
-			PPSSignaturePoint p = centerPoint;
-			p.vertex.x += velocityRadius.x * cosf(angle);
-			p.vertex.y += velocityRadius.y * sinf(angle);
-			
-			addVertex(&dotsLength, p);
-			addVertex(&dotsLength, centerPoint);
-			
-			angle += M_PI * 2.0 / segments;
-		}
-		
-		addVertex(&dotsLength, touchPoint);
-		
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-	}
-	
-	[self setNeedsDisplay];
+    if (t.state != UIGestureRecognizerStateRecognized) return;
+
+    CGPoint l = [t locationInView:self];
+
+    [self ensureBitmapContext];
+    if (!_bitmapContext) return;
+
+    CGFloat radius = _penThickness > 0 ? _penThickness : (STROKE_WIDTH_MIN + STROKE_WIDTH_MAX) / 2.0;
+
+    CGContextSaveGState(_bitmapContext);
+    CGContextSetFillColorWithColor(_bitmapContext, _penColor.CGColor);
+    CGRect dotRect = CGRectMake(l.x - radius / 2.0, l.y - radius / 2.0, radius, radius);
+    CGContextFillEllipseInRect(_bitmapContext, dotRect);
+    CGContextRestoreGState(_bitmapContext);
+
+    self.hasSignature = YES;
+    [self setNeedsDisplay];
 }
 
-
 - (void)longPress:(UILongPressGestureRecognizer *)lp {
-	[self erase];
+    if (lp.state == UIGestureRecognizerStateBegan) {
+        [self erase];
+    }
 }
 
 - (void)pan:(UIPanGestureRecognizer *)p {
-	
-	glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-	
-	CGPoint v = [p velocityInView:self];
-	CGPoint l = [p locationInView:self];
-	
-	currentVelocity = ViewPointToGL(v, self.bounds, (GLKVector3){0,0,0});
-	float distance = 0.;
-	if (previousPoint.x > 0) {
-		distance = sqrtf((l.x - previousPoint.x) * (l.x - previousPoint.x) + (l.y - previousPoint.y) * (l.y - previousPoint.y));
-	}
-	
-	float velocityMagnitude = sqrtf(v.x*v.x + v.y*v.y);
-	float clampedVelocityMagnitude = clamp(VELOCITY_CLAMP_MIN, VELOCITY_CLAMP_MAX, velocityMagnitude);
-	float normalizedVelocity = (clampedVelocityMagnitude - VELOCITY_CLAMP_MIN) / (VELOCITY_CLAMP_MAX - VELOCITY_CLAMP_MIN);
-	
-	float lowPassFilterAlpha = STROKE_WIDTH_SMOOTHING;
-	float newThickness = (STROKE_WIDTH_MAX - STROKE_WIDTH_MIN) * (1 - normalizedVelocity) + STROKE_WIDTH_MIN;
-	penThickness = penThickness * lowPassFilterAlpha + newThickness * (1 - lowPassFilterAlpha);
-	
-	if ([p state] == UIGestureRecognizerStateBegan) {
-		
-		previousPoint = l;
-		previousMidPoint = l;
-		
-		PPSSignaturePoint startPoint = ViewPointToGL(l, self.bounds, (GLKVector3){1, 1, 1});
-		previousVertex = startPoint;
-		previousThickness = penThickness;
-		
-		addVertex(&length, startPoint);
-		addVertex(&length, previousVertex);
-		
-		self.hasSignature = YES;
-		[self.manager publishDraggedEvent];
-		
-	} else if ([p state] == UIGestureRecognizerStateChanged) {
-		
-		CGPoint mid = CGPointMake((l.x + previousPoint.x) / 2.0, (l.y + previousPoint.y) / 2.0);
-		
-		if (distance > QUADRATIC_DISTANCE_TOLERANCE) {
-			// Plot quadratic bezier instead of line
-			unsigned int i;
-			
-			int segments = (int) distance / 1.5;
-			
-			float startPenThickness = previousThickness;
-			float endPenThickness = penThickness;
-			previousThickness = penThickness;
-			
-			for (i = 0; i < segments; i++)
-			{
-				penThickness = startPenThickness + ((endPenThickness - startPenThickness) / segments) * i;
-				
-				CGPoint quadPoint = QuadraticPointInCurve(previousMidPoint, mid, previousPoint, (float)i / (float)(segments));
-				
-				PPSSignaturePoint v = ViewPointToGL(quadPoint, self.bounds, StrokeColor);
-				[self addTriangleStripPointsForPrevious:previousVertex next:v];
-				
-				previousVertex = v;
-			}
-		} else if (distance > 1.0) {
-			
-			PPSSignaturePoint v = ViewPointToGL(l, self.bounds, StrokeColor);
-			[self addTriangleStripPointsForPrevious:previousVertex next:v];
-			
-			previousVertex = v;
-			previousThickness = penThickness;
-		}
-		
-		previousPoint = l;
-		previousMidPoint = mid;
-		
-	} else if (p.state == UIGestureRecognizerStateEnded | p.state == UIGestureRecognizerStateCancelled) {
-		
-		PPSSignaturePoint v = ViewPointToGL(l, self.bounds, (GLKVector3){1, 1, 1});
-		addVertex(&length, v);
-		
-		previousVertex = v;
-		addVertex(&length, previousVertex);
-	}
-	
-	[self setNeedsDisplay];
+    CGPoint v = [p velocityInView:self];
+    CGPoint l = [p locationInView:self];
+
+    CGFloat distance = 0.0;
+    if (_previousPoint.x > -50) {
+        distance = sqrtf((l.x - _previousPoint.x) * (l.x - _previousPoint.x) +
+                         (l.y - _previousPoint.y) * (l.y - _previousPoint.y));
+    }
+
+    CGFloat velocityMagnitude = sqrtf(v.x * v.x + v.y * v.y);
+    CGFloat clampedVelocityMagnitude = clamp(VELOCITY_CLAMP_MIN, VELOCITY_CLAMP_MAX, velocityMagnitude);
+    CGFloat normalizedVelocity = (clampedVelocityMagnitude - VELOCITY_CLAMP_MIN) / (VELOCITY_CLAMP_MAX - VELOCITY_CLAMP_MIN);
+
+    CGFloat lowPassFilterAlpha = STROKE_WIDTH_SMOOTHING;
+    CGFloat newThickness = (STROKE_WIDTH_MAX - STROKE_WIDTH_MIN) * (1 - normalizedVelocity) + STROKE_WIDTH_MIN;
+    _penThickness = _penThickness * lowPassFilterAlpha + newThickness * (1 - lowPassFilterAlpha);
+
+    [self ensureBitmapContext];
+    if (!_bitmapContext) return;
+
+    if ([p state] == UIGestureRecognizerStateBegan) {
+        _previousPoint = l;
+        _previousMidPoint = l;
+        _previousThickness = _penThickness;
+
+        self.hasSignature = YES;
+        if (self.onDraggedBlock) {
+            self.onDraggedBlock();
+        }
+
+    } else if ([p state] == UIGestureRecognizerStateChanged) {
+        CGPoint mid = CGPointMake((l.x + _previousPoint.x) / 2.0, (l.y + _previousPoint.y) / 2.0);
+
+        if (distance > QUADRATIC_DISTANCE_TOLERANCE) {
+            int segments = (int)(distance / 1.5);
+
+            CGFloat startPenThickness = _previousThickness;
+            CGFloat endPenThickness = _penThickness;
+            _previousThickness = _penThickness;
+
+            for (int i = 0; i < segments; i++) {
+                CGFloat t = (CGFloat)i / (CGFloat)segments;
+                CGFloat thickness = startPenThickness + ((endPenThickness - startPenThickness) / segments) * i;
+
+                // Quadratic Bezier interpolation
+                CGFloat a = pow((1.0 - t), 2.0);
+                CGFloat b = 2.0 * t * (1.0 - t);
+                CGFloat c = pow(t, 2.0);
+
+                CGPoint quadPoint = CGPointMake(
+                    a * _previousMidPoint.x + b * _previousPoint.x + c * mid.x,
+                    a * _previousMidPoint.y + b * _previousPoint.y + c * mid.y
+                );
+
+                [self strokeSegmentFrom:_previousPoint to:quadPoint thickness:thickness];
+            }
+        } else if (distance > 1.0) {
+            [self strokeSegmentFrom:_previousPoint to:l thickness:_penThickness];
+            _previousThickness = _penThickness;
+        }
+
+        _previousPoint = l;
+        _previousMidPoint = mid;
+
+    } else if (p.state == UIGestureRecognizerStateEnded || p.state == UIGestureRecognizerStateCancelled) {
+        // Draw final point
+        [self strokeSegmentFrom:_previousPoint to:l thickness:_penThickness];
+    }
+
+    [self setNeedsDisplay];
 }
 
+- (void)strokeSegmentFrom:(CGPoint)from to:(CGPoint)to thickness:(CGFloat)thickness {
+    if (!_bitmapContext) return;
+
+    CGContextSaveGState(_bitmapContext);
+
+    CGContextSetStrokeColorWithColor(_bitmapContext, _penColor.CGColor);
+    CGContextSetLineWidth(_bitmapContext, thickness);
+    CGContextSetLineCap(_bitmapContext, kCGLineCapRound);
+    CGContextSetLineJoin(_bitmapContext, kCGLineJoinRound);
+
+    CGContextMoveToPoint(_bitmapContext, from.x, from.y);
+    CGContextAddLineToPoint(_bitmapContext, to.x, to.y);
+    CGContextStrokePath(_bitmapContext);
+
+    CGContextRestoreGState(_bitmapContext);
+}
+
+#pragma mark - Erase
+
+- (void)erase {
+    self.hasSignature = NO;
+    _previousPoint = CGPointMake(-100, -100);
+    _previousMidPoint = CGPointMake(-100, -100);
+    _penThickness = (STROKE_WIDTH_MIN + STROKE_WIDTH_MAX) / 2.0;
+    _previousThickness = _penThickness;
+
+    if (_bitmapContext) {
+        [self fillBitmapWithBackgroundColor];
+    }
+
+    [self setNeedsDisplay];
+}
+
+#pragma mark - Color Properties
 
 - (void)setStrokeColor:(UIColor *)strokeColor {
-	_strokeColor = strokeColor;
-	[self updateStrokeColor];
+    _strokeColor = strokeColor;
+    _penColor = strokeColor ?: [UIColor blackColor];
 }
-
-
-#pragma mark - Private
-
-- (void)updateStrokeColor {
-	CGFloat red, green, blue, alpha, white;
-	if (effect && self.strokeColor && [self.strokeColor getRed:&red green:&green blue:&blue alpha:&alpha]) {
-		effect.constantColor = GLKVector4Make(red, green, blue, alpha);
-	} else if (effect && self.strokeColor && [self.strokeColor getWhite:&white alpha:&alpha]) {
-		effect.constantColor = GLKVector4Make(white, white, white, alpha);
-	} else effect.constantColor = GLKVector4Make(0,0,0,1);
-}
-
 
 - (void)setBackgroundColor:(UIColor *)backgroundColor {
-	[super setBackgroundColor:backgroundColor];
-	
-	CGFloat red, green, blue, alpha, white;
-	if ([backgroundColor getRed:&red green:&green blue:&blue alpha:&alpha]) {
-		clearColor[0] = red;
-		clearColor[1] = green;
-		clearColor[2] = blue;
-	} else if ([backgroundColor getWhite:&white alpha:&alpha]) {
-		clearColor[0] = white;
-		clearColor[1] = white;
-		clearColor[2] = white;
-	}
+    [super setBackgroundColor:backgroundColor];
+    _bgColor = backgroundColor ?: [UIColor whiteColor];
+
+    if (_bitmapContext && !self.hasSignature) {
+        [self fillBitmapWithBackgroundColor];
+        [self setNeedsDisplay];
+    }
 }
 
-- (void)bindShaderAttributes {
-	glEnableVertexAttribArray(GLKVertexAttribPosition);
-	glVertexAttribPointer(GLKVertexAttribPosition, 3, GL_FLOAT, GL_FALSE, sizeof(PPSSignaturePoint), 0);
-	//    glEnableVertexAttribArray(GLKVertexAttribColor);
-	//    glVertexAttribPointer(GLKVertexAttribColor, 3, GL_FLOAT, GL_FALSE,  6 * sizeof(GLfloat), (char *)12);
+#pragma mark - Image Export
+
+- (UIImage *)snapshot {
+    if (!_bitmapContext) return nil;
+
+    CGImageRef cgImage = CGBitmapContextCreateImage(_bitmapContext);
+    if (!cgImage) return nil;
+
+    UIImage *image = [UIImage imageWithCGImage:cgImage scale:[UIScreen mainScreen].scale orientation:UIImageOrientationUp];
+    CGImageRelease(cgImage);
+    return image;
 }
 
-- (void)setupGL
-{
-	[EAGLContext setCurrentContext:context];
-	
-	effect = [[GLKBaseEffect alloc] init];
-	
-	[self updateStrokeColor];
-	
-	
-	glDisable(GL_DEPTH_TEST);
-	
-	// Signature Lines
-	glGenVertexArraysOES(1, &vertexArray);
-	glBindVertexArrayOES(vertexArray);
-	
-	glGenBuffers(1, &vertexBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(SignatureVertexData), SignatureVertexData, GL_DYNAMIC_DRAW);
-	[self bindShaderAttributes];
-	
-	
-	// Signature Dots
-	glGenVertexArraysOES(1, &dotsArray);
-	glBindVertexArrayOES(dotsArray);
-	
-	glGenBuffers(1, &dotsBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, dotsBuffer);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(SignatureDotsData), SignatureDotsData, GL_DYNAMIC_DRAW);
-	[self bindShaderAttributes];
-	
-	
-	glBindVertexArrayOES(0);
-	
-	
-	// Perspective
-	GLKMatrix4 ortho = GLKMatrix4MakeOrtho(-1, 1, -1, 1, 0.1f, 2.0f);
-	effect.transform.projectionMatrix = ortho;
-	
-	GLKMatrix4 modelViewMatrix = GLKMatrix4MakeTranslation(0.0f, 0.0f, -1.0f);
-	effect.transform.modelviewMatrix = modelViewMatrix;
-	
-	length = 0;
-	penThickness = 0.003;
-	previousPoint = CGPointMake(-100, -100);
+- (UIImage *)rotateImage:(UIImage *)sourceImage clockwise:(BOOL)clockwise {
+    CGSize size = sourceImage.size;
+    UIGraphicsBeginImageContext(CGSizeMake(size.height, size.width));
+    [[UIImage imageWithCGImage:[sourceImage CGImage]
+                         scale:1.0
+                   orientation:clockwise ? UIImageOrientationRight : UIImageOrientationLeft]
+     drawInRect:CGRectMake(0, 0, size.height, size.width)];
+
+    UIImage *newImage = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+
+    return newImage;
 }
 
+- (UIImage *)reduceImage:(UIImage *)image toSize:(CGSize)newSize {
+    CGSize scaledSize = newSize;
+    float scaleFactor = 1.0;
 
+    if (image.size.width > image.size.height) {
+        scaleFactor = image.size.width / image.size.height;
+        scaledSize.width = newSize.width;
+        scaledSize.height = newSize.height / scaleFactor;
+    } else {
+        scaleFactor = image.size.height / image.size.width;
+        scaledSize.height = newSize.height;
+        scaledSize.width = newSize.width / scaleFactor;
+    }
 
-- (void)addTriangleStripPointsForPrevious:(PPSSignaturePoint)previous next:(PPSSignaturePoint)next {
-	float toTravel = penThickness / 2.0;
-	
-	for (int i = 0; i < 2; i++) {
-		GLKVector3 p = perpendicular(previous, next);
-		GLKVector3 p1 = next.vertex;
-		GLKVector3 ref = GLKVector3Add(p1, p);
-		
-		float distance = GLKVector3Distance(p1, ref);
-		float difX = p1.x - ref.x;
-		float difY = p1.y - ref.y;
-		float ratio = -1.0 * (toTravel / distance);
-		
-		difX = difX * ratio;
-		difY = difY * ratio;
-		
-		PPSSignaturePoint stripPoint = {
-			{ p1.x + difX, p1.y + difY, 0.0 },
-			StrokeColor
-		};
-		addVertex(&length, stripPoint);
-		
-		toTravel *= -1;
-	}
+    UIGraphicsBeginImageContext(scaledSize);
+    CGRect scaledImageRect = CGRectMake(0.0, 0.0, scaledSize.width, scaledSize.height);
+    [image drawInRect:scaledImageRect];
+
+    UIImage *scaledImage = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+
+    return scaledImage;
 }
 
+- (UIImage *)signatureImage {
+    return [self signatureImage:NO withSquare:NO];
+}
 
-- (void)tearDownGL
-{
-	[EAGLContext setCurrentContext:context];
-	
-	glDeleteVertexArraysOES(1, &vertexArray);
-	glDeleteBuffers(1, &vertexBuffer);
-	
-	glDeleteVertexArraysOES(1, &dotsArray);
-	glDeleteBuffers(1, &dotsBuffer);
-	
-	effect = nil;
+- (UIImage *)signatureImage:(BOOL)rotatedImage {
+    return [self signatureImage:rotatedImage withSquare:NO];
+}
+
+- (UIImage *)signatureImage:(BOOL)rotatedImage withSquare:(BOOL)square {
+    if (!self.hasSignature)
+        return nil;
+
+    UIImage *signatureImg;
+    UIImage *snapshotImg = [self snapshot];
+    [self erase];
+
+    if (square) {
+        signatureImg = [self reduceImage:snapshotImg toSize:CGSizeMake(400.0f, 400.0f)];
+    } else {
+        signatureImg = snapshotImg;
+    }
+
+    if (rotatedImage) {
+        signatureImg = [self rotateImage:signatureImg clockwise:NO];
+    }
+
+    return signatureImg;
 }
 
 @end

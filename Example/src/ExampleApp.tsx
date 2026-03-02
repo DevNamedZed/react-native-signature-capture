@@ -1,4 +1,4 @@
-import React, {useState, useRef} from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,22 +7,23 @@ import {
   Image,
   TouchableOpacity,
 } from 'react-native';
-import SignatureView from './SignatureView';
+import type { SaveEvent } from 'react-native-signature-capture';
+import SignatureView, { type SignatureViewRef } from './SignatureView';
 
-const ExampleApp: () => React$Node = () => {
-  const [data, setData] = useState(null);
-  const signatureView = useRef(null);
+const ExampleApp = () => {
+  const [data, setData] = useState<string | null>(null);
+  const signatureView = useRef<SignatureViewRef>(null);
 
-  const onSave = function (result) {
+  const onSave = (result: SaveEvent) => {
     setData(`data:image/png;base64,${result.encoded}`);
-    signatureView.current.show(false);
+    signatureView.current?.show(false);
   };
 
   return (
     <View style={styles.container}>
       <TouchableOpacity
         onPress={() => {
-          signatureView.current.show(true);
+          signatureView.current?.show(true);
         }}>
         <View>
           <Text style={styles.titleText}>
@@ -30,7 +31,7 @@ const ExampleApp: () => React$Node = () => {
           </Text>
           {data && (
             <View style={styles.imageContainer}>
-              <Image style={styles.previewImage} source={{uri: data}} />
+              <Image style={styles.previewImage} source={{ uri: data }} />
               <Button title="Clear" onPress={() => setData(null)} />
             </View>
           )}

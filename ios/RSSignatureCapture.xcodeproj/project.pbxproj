@@ -10,6 +10,13 @@
 		0C53A9EE1B56134F004F2642 /* RSSignatureViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 0C53A9ED1B56134F004F2642 /* RSSignatureViewManager.m */; };
 		0C53A9F31B5613AF004F2642 /* PPSSignatureView.m in Sources */ = {isa = PBXBuildFile; fileRef = 0C53A9F01B5613AF004F2642 /* PPSSignatureView.m */; };
 		0C53A9F41B5613AF004F2642 /* RSSignatureView.m in Sources */ = {isa = PBXBuildFile; fileRef = 0C53A9F21B5613AF004F2642 /* RSSignatureView.m */; };
+		FA00000000000000000000B1 /* PPSSignatureViewTests.m in Sources */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000A1 /* PPSSignatureViewTests.m */; };
+		FA00000000000000000000B2 /* RSSignatureViewManagerTests.m in Sources */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000A2 /* RSSignatureViewManagerTests.m */; };
+		FA00000000000000000000B3 /* RSSignatureViewTests.m in Sources */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000A3 /* RSSignatureViewTests.m */; };
+		FA00000000000000000000B4 /* PPSSignatureView.m in Sources */ = {isa = PBXBuildFile; fileRef = 0C53A9F01B5613AF004F2642 /* PPSSignatureView.m */; };
+		FA00000000000000000000B5 /* RSSignatureView.m in Sources */ = {isa = PBXBuildFile; fileRef = 0C53A9F21B5613AF004F2642 /* RSSignatureView.m */; };
+		FA00000000000000000000B6 /* RSSignatureViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 0C53A9ED1B56134F004F2642 /* RSSignatureViewManager.m */; };
+		FA00000000000000000000B7 /* ReactStubs.m in Sources */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000A7 /* ReactStubs.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -32,10 +39,23 @@
 		0C53A9F01B5613AF004F2642 /* PPSSignatureView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PPSSignatureView.m; sourceTree = "<group>"; };
 		0C53A9F11B5613AF004F2642 /* RSSignatureView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RSSignatureView.h; sourceTree = "<group>"; };
 		0C53A9F21B5613AF004F2642 /* RSSignatureView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RSSignatureView.m; sourceTree = "<group>"; };
+		FA00000000000000000000A1 /* PPSSignatureViewTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PPSSignatureViewTests.m; sourceTree = "<group>"; };
+		FA00000000000000000000A2 /* RSSignatureViewManagerTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RSSignatureViewManagerTests.m; sourceTree = "<group>"; };
+		FA00000000000000000000A3 /* RSSignatureViewTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RSSignatureViewTests.m; sourceTree = "<group>"; };
+		FA00000000000000000000A4 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		FA00000000000000000000A6 /* RSSignatureCaptureTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RSSignatureCaptureTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FA00000000000000000000A7 /* ReactStubs.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ReactStubs.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		0C53A99B1B56113D004F2642 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA00000000000000000000C2 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -54,6 +74,8 @@
 				0C53A9F21B5613AF004F2642 /* RSSignatureView.m */,
 				0C53A9EC1B56134F004F2642 /* RSSignatureViewManager.h */,
 				0C53A9ED1B56134F004F2642 /* RSSignatureViewManager.m */,
+				FA00000000000000000000A5 /* RSSignatureCaptureTests */,
+				FA00000000000000000000A8 /* ReactStubs */,
 				0C53A99F1B56113D004F2642 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -62,8 +84,28 @@
 			isa = PBXGroup;
 			children = (
 				0C53A99E1B56113D004F2642 /* libRSSignatureCapture.a */,
+				FA00000000000000000000A6 /* RSSignatureCaptureTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		FA00000000000000000000A5 /* RSSignatureCaptureTests */ = {
+			isa = PBXGroup;
+			children = (
+				FA00000000000000000000A1 /* PPSSignatureViewTests.m */,
+				FA00000000000000000000A2 /* RSSignatureViewManagerTests.m */,
+				FA00000000000000000000A3 /* RSSignatureViewTests.m */,
+				FA00000000000000000000A4 /* Info.plist */,
+			);
+			path = RSSignatureCaptureTests;
+			sourceTree = "<group>";
+		};
+		FA00000000000000000000A8 /* ReactStubs */ = {
+			isa = PBXGroup;
+			children = (
+				FA00000000000000000000A7 /* ReactStubs.m */,
+			);
+			path = ReactStubs;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -86,6 +128,23 @@
 			productReference = 0C53A99E1B56113D004F2642 /* libRSSignatureCapture.a */;
 			productType = "com.apple.product-type.library.static";
 		};
+		FA00000000000000000000D1 /* RSSignatureCaptureTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FA00000000000000000000D2 /* Build configuration list for PBXNativeTarget "RSSignatureCaptureTests" */;
+			buildPhases = (
+				FA00000000000000000000C1 /* Sources */,
+				FA00000000000000000000C2 /* Frameworks */,
+				FA00000000000000000000C3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RSSignatureCaptureTests;
+			productName = RSSignatureCaptureTests;
+			productReference = FA00000000000000000000A6 /* RSSignatureCaptureTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -97,6 +156,9 @@
 				TargetAttributes = {
 					0C53A99D1B56113D004F2642 = {
 						CreatedOnToolsVersion = 6.4;
+					};
+					FA00000000000000000000D1 = {
+						CreatedOnToolsVersion = 15.0;
 					};
 				};
 			};
@@ -113,9 +175,20 @@
 			projectRoot = "";
 			targets = (
 				0C53A99D1B56113D004F2642 /* RSSignatureCapture */,
+				FA00000000000000000000D1 /* RSSignatureCaptureTests */,
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		FA00000000000000000000C3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		0C53A99A1B56113D004F2642 /* Sources */ = {
@@ -125,6 +198,20 @@
 				0C53A9EE1B56134F004F2642 /* RSSignatureViewManager.m in Sources */,
 				0C53A9F41B5613AF004F2642 /* RSSignatureView.m in Sources */,
 				0C53A9F31B5613AF004F2642 /* PPSSignatureView.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA00000000000000000000C1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA00000000000000000000B4 /* PPSSignatureView.m in Sources */,
+				FA00000000000000000000B5 /* RSSignatureView.m in Sources */,
+				FA00000000000000000000B6 /* RSSignatureViewManager.m in Sources */,
+				FA00000000000000000000B7 /* ReactStubs.m in Sources */,
+				FA00000000000000000000B1 /* PPSSignatureViewTests.m in Sources */,
+				FA00000000000000000000B2 /* RSSignatureViewManagerTests.m in Sources */,
+				FA00000000000000000000B3 /* RSSignatureViewTests.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -239,6 +326,38 @@
 			};
 			name = Release;
 		};
+		FA00000000000000000000D3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)",
+					"$(SRCROOT)/ReactStubs",
+				);
+				INFOPLIST_FILE = RSSignatureCaptureTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rssignaturecapture.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		FA00000000000000000000D4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)",
+					"$(SRCROOT)/ReactStubs",
+				);
+				INFOPLIST_FILE = RSSignatureCaptureTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rssignaturecapture.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -256,6 +375,15 @@
 			buildConfigurations = (
 				0C53A9B31B56113D004F2642 /* Debug */,
 				0C53A9B41B56113D004F2642 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FA00000000000000000000D2 /* Build configuration list for PBXNativeTarget "RSSignatureCaptureTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA00000000000000000000D3 /* Debug */,
+				FA00000000000000000000D4 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

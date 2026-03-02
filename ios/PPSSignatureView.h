@@ -1,19 +1,15 @@
 #import <UIKit/UIKit.h>
-#import <GLKit/GLKit.h>
 
-@class RSSignatureViewManager;
+@interface PPSSignatureView : UIView
 
-@interface PPSSignatureView : GLKView
-
-@property (assign, nonatomic) UIColor *strokeColor;
+@property (strong, nonatomic) UIColor *strokeColor;
 @property (assign, nonatomic) BOOL hasSignature;
-@property (strong, nonatomic) UIImage *signatureImage;
-@property (nonatomic, strong) RSSignatureViewManager *manager;
+@property (nonatomic, copy) void (^onDraggedBlock)(void);
 
 - (void)erase;
 
-- (UIImage *) signatureImage;
-- (UIImage *) signatureImage: (BOOL) rotatedImage;
-- (UIImage *) signatureImage: (BOOL) rotatedImage withSquare:(BOOL)square;
+- (UIImage *)signatureImage;
+- (UIImage *)signatureImage:(BOOL)rotatedImage;
+- (UIImage *)signatureImage:(BOOL)rotatedImage withSquare:(BOOL)square;
 
 @end

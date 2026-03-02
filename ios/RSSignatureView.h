@@ -1,15 +1,22 @@
 #import "PPSSignatureView.h"
 #import <UIKit/UIKit.h>
 #import <React/RCTView.h>
-#import <React/RCTBridge.h>
-
-@class RSSignatureViewManager;
 
 @interface RSSignatureView : RCTView
+
 @property (nonatomic, strong) PPSSignatureView *sign;
-@property (nonatomic, strong) RSSignatureViewManager *manager;
--(void) onSaveButtonPressed;
--(void) onClearButtonPressed;
--(void) saveImage;
--(void) erase;
+@property (nonatomic, copy) RCTDirectEventBlock onSaveEvent;
+@property (nonatomic, copy) RCTDirectEventBlock onDragEvent;
+
+- (void)saveImage;
+- (void)erase;
+- (void)fireDragEvent;
+
+- (void)setRotateClockwise:(BOOL)rotateClockwise;
+- (void)setSquare:(BOOL)square;
+- (void)setShowBorder:(BOOL)showBorder;
+- (void)setShowNativeButtons:(BOOL)showNativeButtons;
+- (void)setShowTitleLabel:(BOOL)showTitleLabel;
+- (void)setStrokeColor:(UIColor *)strokeColor;
+
 @end

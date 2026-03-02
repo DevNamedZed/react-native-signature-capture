@@ -1,243 +1,121 @@
 # react-native-signature-capture
 
-## About this
-React Native library for capturing signature
+A React Native library for capturing signatures. Users sign on the screen and the library returns the signature as a base64-encoded PNG and/or a file path.
 
-User would sign on the app and when you press the save button it returns the base64 encoded png
+This is a modernized fork of the abandoned [RepairShopr/react-native-signature-capture](https://github.com/RepairShopr/react-native-signature-capture), rewritten for React Native 0.73+ with TypeScript, New Architecture (Fabric) support, and Core Graphics rendering on iOS (replacing the deprecated OpenGL ES).
 
-### iOS
-<img src="http://i.giphy.com/3oEduIyWb48Ws3bSuc.gif" />
+## Requirements
 
-### Android
-<img src="http://i.giphy.com/xT0GUKJFFkdDv25FNC.gif" />
-
-## Contribution
-Contributions are welcome and are greatly appreciated! Every little bit helps, and credit will always be given. Please read our [Pull request guidelines](https://github.com/RepairShopr/react-native-signature-capture/wiki/Pull-Request-Guidelines) before submitting your PR
+- React Native >= 0.73.0
+- React >= 18.0.0
+- iOS >= 16.4
+- Android SDK 24+ (compileSdk 35)
 
 ## Install
 
-First you need to install react-native-signature-capture:
+```sh
+npm install react-native-signature-capture
+```
+
+On iOS, run pod install:
 
 ```sh
-npm install react-native-signature-capture --save
+cd ios && pod install
 ```
 
-Second you need to link react-native-signature-capture:
-
-```sh
-react-native link react-native-signature-capture
-```
-
-Use above `react-native link` command to automatically complete the installation, or link manually like so:
-
-### iOS
-
-1. In the XCode's "Project navigator", right click on your project's Libraries folder ➜ Add Files to <...>
-2. Go to node_modules ➜ react-native-signature-capture ➜ ios ➜ select RSSignatureCapture.xcodeproj
-3. Add libRSSignatureCapture.a to Build Phases -> Link Binary With Libraries
-4. Compile and have fun
-
-### Android
-
-Add these lines in your file: android/settings.gradle
-
-```
-...
-
-include ':reactnativesignaturecapture',':app'
-project(':reactnativesignaturecapture').projectDir = new File(settingsDir, '../node_modules/react-native-signature-capture/android')
-```
-
-Add line in your file: android/app/build.gradle
-
-```
-...
-
-dependencies {
-    ...
-    compile project(':reactnativesignaturecapture') // <-- add this line
-}
-```
-
-Add import and line in your file: android/app/src/main/java/<...>/MainApplication.java
-
-```java
-...
-
-import com.rssignaturecapture.RSSignatureCapturePackage; // <-- add this import
-
-public class MainApplication extends Application implements ReactApplication {
-
-    private final ReactNativeHost mReactNativeHost = new ReactNativeHost(this) {
-
-        @Override
-        protected List<ReactPackage> getPackages() {
-            return Arrays.<ReactPackage>asList(
-                new MainReactPackage(),
-                new RSSignatureCapturePackage() // <-- add this line
-            );
-        }
-  }
-
-...
-}
-```
+Auto-linking handles the rest. No manual linking required.
 
 ## Usage
 
-Then you can use SignatureCapture component in your react-native's App, like this:
-```javascript
-...
-import React, {Component} from 'react';
-import SignatureCapture from 'react-native-signature-capture';
+```tsx
+import React, { useRef } from 'react';
+import { View, Button, StyleSheet } from 'react-native';
+import SignatureCapture, {
+  type SignatureCaptureRef,
+  type SaveEvent,
+} from 'react-native-signature-capture';
 
-class CustomComponent extends Component {
+function SignatureScreen() {
+  const signatureRef = useRef<SignatureCaptureRef>(null);
 
-  ...
-  render() {
-    return (
+  const handleSave = (event: SaveEvent) => {
+    console.log('Base64:', event.encoded);
+    console.log('File path:', event.pathName);
+  };
+
+  return (
+    <View style={styles.container}>
       <SignatureCapture
-        {...someProps}
+        ref={signatureRef}
+        style={styles.signature}
+        onSaveEvent={handleSave}
+        onDragEvent={() => console.log('User is signing')}
+        showNativeButtons={false}
+        showTitleLabel={false}
+        viewMode="portrait"
       />
-    );
-  }
-}
-```
-
-### Properties
-
-+ **saveImageFileInExtStorage** : Make this props true, if you want to save the image file in external storage. Default is false. Warning: Image file will be visible in gallery or any other image browsing app
-
-+ **showBorder** : If this props is made to false, it will hide the dashed border (the border is shown on iOS only).
-
-+ **showNativeButtons** : If this props is made to true, it will display the native buttons "Save" and "Reset".
-
-+ **showTitleLabel** : If this props is made to true, it will display the "x_ _ _ _ _ _ _ _ _ _ _" placeholder indicating where to sign.
-
-+ **viewMode** : "portrait" or "landscape" change the screen orientation based on boolean value
-
-+ **maxSize**  : sets the max size of the image maintains aspect ratio, default is 500
-
-+ **minStrokeWidth**  :  sets the min stroke line width (_Android only_)
-
-+ **maxStrokeWidth**  :  sets the max stroke line width (_Android only_)
-
-+ **backgroundColor**: Sets the background color of the component. Defaults to white. May be 'transparent'.
-
-+ **strokeColor**: Sets the color of the signature. Defaults to black.
-
-### Methods
-
-+ **saveImage()** : when called it will save the image and returns the base 64 encoded string on onSaveEvent() callback
-
-+ **resetImage()** : when called it will clear the image on the canvas
-
-### Callback Props
-+ **onSaveEvent** : Triggered when saveImage() is called, which return Base64 Encoded String and image file path.
-
-+ **onDragEvent** : Triggered when user marks his signature on the canvas. This will not be called when the user does not perform any action on canvas.
-
-
-### Example
-
-```javascript
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- */
-
-var React = require('react');
-var ReactNative = require('react-native');
-
-var {Component} = React;
-
-var {
-    AppRegistry,
-    StyleSheet,
-    Text,
-    View, TouchableHighlight
-} = ReactNative;
-
-import SignatureCapture from 'react-native-signature-capture';
-
-class RNSignatureExample extends Component {
-    render() {
-        return (
-            <View style={{ flex: 1, flexDirection: "column" }}>
-                <Text style={{alignItems:"center",justifyContent:"center"}}>Signature Capture Extended </Text>
-                <SignatureCapture
-                    style={[{flex:1},styles.signature]}
-                    ref="sign"
-                    onSaveEvent={this._onSaveEvent}
-                    onDragEvent={this._onDragEvent}
-                    saveImageFileInExtStorage={false}
-                    showNativeButtons={false}
-                    showTitleLabel={false}
-                    backgroundColor="#ff00ff"
-                    strokeColor="#ffffff"
-                    minStrokeWidth={4}
-                    maxStrokeWidth={4}
-                    viewMode={"portrait"}/>
-
-                <View style={{ flex: 1, flexDirection: "row" }}>
-                    <TouchableHighlight style={styles.buttonStyle}
-                        onPress={() => { this.saveSign() } } >
-                        <Text>Save</Text>
-                    </TouchableHighlight>
-
-                    <TouchableHighlight style={styles.buttonStyle}
-                        onPress={() => { this.resetSign() } } >
-                        <Text>Reset</Text>
-                    </TouchableHighlight>
-
-                </View>
-
-            </View>
-        );
-    }
-
-    saveSign() {
-        this.refs["sign"].saveImage();
-    }
-
-    resetSign() {
-        this.refs["sign"].resetImage();
-    }
-
-    _onSaveEvent(result) {
-        //result.encoded - for the base64 encoded png
-        //result.pathName - for the file path name
-        console.log(result);
-    }
-    _onDragEvent() {
-         // This callback will be called when the user enters signature
-        console.log("dragged");
-    }
+      <View style={styles.buttons}>
+        <Button title="Save" onPress={() => signatureRef.current?.saveImage()} />
+        <Button title="Reset" onPress={() => signatureRef.current?.resetImage()} />
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    signature: {
-        flex: 1,
-        borderColor: '#000033',
-        borderWidth: 1,
-    },
-    buttonStyle: {
-        flex: 1, justifyContent: "center", alignItems: "center", height: 50,
-        backgroundColor: "#eeeeee",
-        margin: 10
-    }
+  container: { flex: 1 },
+  signature: { flex: 1, borderColor: '#000', borderWidth: 1 },
+  buttons: { flexDirection: 'row', justifyContent: 'space-around', padding: 10 },
 });
-
-AppRegistry.registerComponent('RNSignatureExample', () => RNSignatureExample);
 ```
 
--------------
+## Props
 
-Please checkout the example folder (iOS/Android):
-https://github.com/RepairShopr/react-native-signature-capture/tree/master/Example
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `saveImageFileInExtStorage` | `boolean` | `false` | Save the image file to external storage (Android). Warning: image will be visible in gallery apps. |
+| `showBorder` | `boolean` | `true` | Show a dashed border around the signature area (iOS only). |
+| `showNativeButtons` | `boolean` | `true` | Show native "Save" and "Reset" buttons. |
+| `showTitleLabel` | `boolean` | `true` | Show the "x\_ \_ \_" placeholder indicating where to sign. |
+| `viewMode` | `string` | `"portrait"` | `"portrait"` or `"landscape"` — locks screen orientation. |
+| `maxSize` | `number` | `500` | Max dimension of the output image (maintains aspect ratio). |
+| `minStrokeWidth` | `number` | — | Minimum stroke line width (Android only). |
+| `maxStrokeWidth` | `number` | — | Maximum stroke line width (Android only). |
+| `backgroundColor` | `string` | `"#FFFFFF"` | Background color. Supports `"transparent"`. |
+| `strokeColor` | `string` | `"#000000"` | Signature stroke color. |
 
-Library used:
+## Events
 
-https://github.com/jharwig/PPSSignatureView
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `onSaveEvent` | `{ pathName: string, encoded: string }` | Fired when `saveImage()` is called. Returns the file path and base64-encoded PNG. |
+| `onDragEvent` | `{ dragged: boolean }` | Fired when the user draws on the canvas. |
 
-https://github.com/gcacace/android-signaturepad
+## Ref Methods
+
+| Method | Description |
+|--------|-------------|
+| `saveImage()` | Triggers image save. Result is returned via `onSaveEvent`. |
+| `resetImage()` | Clears the signature canvas. |
+
+## TypeScript
+
+The library exports the following types:
+
+```ts
+import type {
+  SignatureCaptureProps,
+  SignatureCaptureRef,
+  SaveEvent,
+  DragEvent,
+} from 'react-native-signature-capture';
+```
+
+## Architecture Support
+
+- **New Architecture (Fabric):** Fully supported via Codegen spec
+- **Old Architecture (Paper):** Supported via interop layer
+
+## License
+
+ISC
